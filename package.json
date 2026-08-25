@@ -1,15 +1,20 @@
 {
-  "name": "hostel",
+  "name": "hostel-monorepo",
   "version": "1.0.0",
-  "description": "mern hostel management",
-  "main": "index.js",
+  "description": "TypeScript / PostgreSQL microservices hostel management system",
+  "private": true,
+  "workspaces": [
+    "backend/shared",
+    "backend/services/*",
+    "frontend"
+  ],
   "scripts": {
-    "dev": "concurrently \"npm run dev --prefix backend\" \"npm run start --prefix frontend\"",
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "dev:infra": "docker-compose up -d",
+    "dev:services": "concurrently \"npm run dev --workspace=backend/services/gateway\" \"npm run dev --workspace=backend/services/auth-service\"",
+    "test": "npm run test --workspaces --if-present"
   },
-  "author": "",
-  "license": "ISC",
   "devDependencies": {
-    "concurrently": "^9.2.1"
+    "concurrently": "^9.2.1",
+    "typescript": "^5.2.2"
   }
 }

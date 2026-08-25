@@ -1,0 +1,252 @@
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+model User {
+  id                    String                 @id @default(uuid()) @db.Uuid
+  usn                   String?                @unique @db.VarChar(20)
+  name                  String                 @db.VarChar(100)
+  email                 String                 @unique @db.VarChar(150)
+  passwordHash          String                 @map("password_hash") @db.VarChar(255)
+  gender                String                 @db.VarChar(10)
+  accountStatus         String                 @default("active") @map("account_status") @db.VarChar(20)
+  createdAt             DateTime               @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt             DateTime               @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
+  
+  roles                 UserRole[]
+  hostelsManaged        Hostel[]               @relation("WardenHostels")
+  roomAllocation        RoomAllocation?
+  requests              StudentRequest[]
+  complaints            Complaint[]
+  payments              Payment[]
+  authoredNotifications Notification[]         @relation("AuthorNotifications")
+  sentMessages          PrivateMessage[]       @relation("SenderMessages")
+  receivedMessages      PrivateMessage[]       @relation("RecipientMessages")
+  inventoryTransactions InventoryTransaction[]
+
+  @@map("users")
+}
+
+model Role {
+  id          String             @id @default(uuid()) @db.Uuid
+  name        String             @unique @db.VarChar(50)
+  description String?            @db.Text
+  createdAt   DateTime           @default(now()) @map("created_at") @db.Timestamptz
+  
+  users       UserRole[]
+  permissions RolePermission[]
+
+  @@map("roles")
+}
+
+model Permission {
+  id          String             @id @default(uuid()) @db.Uuid
+  name        String             @unique @db.VarChar(100)
+  description String?            @db.Text
+  
+  roles       RolePermission[]
+
+  @@map("permissions")
+}
+
+model UserRole {
+  userId String @map("user_id") @db.Uuid
+  roleId String @map("role_id") @db.Uuid
+  
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role   Role   @relation(fields: [roleId], references: [id], onDelete: Cascade)
+
+  @@id([userId, roleId])
+  @@map("user_roles")
+}
+
+model RolePermission {
+  roleId       String     @map("role_id") @db.Uuid
+  permissionId String     @map("permission_id") @db.Uuid
+  
+  role         Role       @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  permission   Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+
+  @@id([roleId, permissionId])
+  @@map("role_permissions")
+}
+
+model Hostel {
+  id            String          @id @default(uuid()) @db.Uuid
+  name          String          @unique @db.VarChar(100)
+  address       String          @db.Text
+  wardenId      String?         @map("warden_id") @db.Uuid
+  warden        User?           @relation("WardenHostels", fields: [wardenId], references: [id], onDelete: SetNull)
+  
+  rooms         Room[]
+  requests      StudentRequest[]
+  weeklyMenu    WeeklyMenu?
+  inventory     InventoryItem[]
+  notifications Notification[]
+
+  createdAt     DateTime        @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt     DateTime        @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
+
+  @@map("hostels")
+}
+
+model Room {
+  id          String           @id @default(uuid()) @db.Uuid
+  hostelId    String           @map("hostel_id") @db.Uuid
+  hostel      Hostel           @relation(fields: [hostelId], references: [id], onDelete: Cascade)
+  roomNumber  String           @map("room_number") @db.VarChar(20)
+  capacity    Int
+  filled      Int              @default(0)
+  createdAt   DateTime         @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt   DateTime         @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
+  
+  allocations RoomAllocation[]
+
+  @@unique([hostelId, roomNumber])
+  @@map("rooms")
+}
+
+model RoomAllocation {
+  id         String   @id @default(uuid()) @db.Uuid
+  roomId     String   @map("room_id") @db.Uuid
+  room       Room     @relation(fields: [roomId], references: [id], onDelete: Cascade)
+  studentId  String   @unique @map("student_id") @db.Uuid
+  student    User     @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  assignedAt DateTime @default(now()) @map("assigned_at") @db.Timestamptz
+
+  @@map("room_allocations")
+}
+
+model StudentRequest {
+  id                String    @id @default(uuid()) @db.Uuid
+  studentId         String    @map("student_id") @db.Uuid
+  student           User      @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  hostelId          String    @map("hostel_id") @db.Uuid
+  hostel            Hostel    @relation(fields: [hostelId], references: [id], onDelete: Cascade)
+  roomType          String    @map("room_type") @db.VarChar(20)
+  status            String    @default("pending") @db.VarChar(20)
+  notes             String?   @db.Text
+  forwardedByAdmin  Boolean   @default(false) @map("forwarded_by_admin")
+  verifiedAt        DateTime? @map("verified_at") @db.Timestamptz
+  createdAt         DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt         DateTime  @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
+
+  @@map("student_requests")
+}
+
+model Complaint {
+  id            String   @id @default(uuid()) @db.Uuid
+  studentId     String   @map("student_id") @db.Uuid
+  student       User     @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  title         String   @db.VarChar(150)
+  description   String   @db.Text
+  category      String   @db.VarChar(30)
+  status        String   @default("pending") @db.VarChar(20)
+  wardenRemarks String?  @map("warden_remarks") @db.Text
+  createdAt     DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt     DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
+
+  @@map("complaints")
+}
+
+model WeeklyMenu {
+  id         String      @id @default(uuid()) @db.Uuid
+  hostelId   String      @unique @map("hostel_id") @db.Uuid
+  hostel     Hostel      @relation(fields: [hostelId], references: [id], onDelete: Cascade)
+  dailyMenus DailyMenu[]
+  createdAt  DateTime    @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt  DateTime    @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
+
+  @@map("weekly_menus")
+}
+
+model DailyMenu {
+  id           String     @id @default(uuid()) @db.Uuid
+  weeklyMenuId String     @map("weekly_menu_id") @db.Uuid
+  weeklyMenu   WeeklyMenu @relation(fields: [weeklyMenuId], references: [id], onDelete: Cascade)
+  dayOfWeek    String     @map("day_of_week") @db.VarChar(15)
+  breakfast    String     @default("Not Set") @db.Text
+  lunch        String     @default("Not Set") @db.Text
+  dinner       String     @default("Not Set") @db.Text
+
+  @@unique([weeklyMenuId, dayOfWeek])
+  @@map("daily_menus")
+}
+
+model InventoryItem {
+  id           String                 @id @default(uuid()) @db.Uuid
+  hostelId     String                 @map("hostel_id") @db.Uuid
+  hostel       Hostel                 @relation(fields: [hostelId], references: [id], onDelete: Cascade)
+  itemName     String                 @map("item_name") @db.VarChar(100)
+  quantity     Decimal                @default(0.00) @db.Decimal(10, 2)
+  unit         String                 @db.VarChar(20)
+  minThreshold Decimal                @default(0.00) @map("min_threshold") @db.Decimal(10, 2)
+  updatedAt    DateTime               @default(now()) @map("updated_at") @db.Timestamptz
+  transactions InventoryTransaction[]
+
+  @@unique([hostelId, itemName])
+  @@map("inventory_items")
+}
+
+model InventoryTransaction {
+  id              String        @id @default(uuid()) @db.Uuid
+  inventoryItemId String        @map("inventory_item_id") @db.Uuid
+  inventoryItem   InventoryItem @relation(fields: [inventoryItemId], references: [id], onDelete: Cascade)
+  type            String        @db.VarChar(10)
+  quantity        Decimal       @db.Decimal(10, 2)
+  updatedBy       String        @map("updated_by") @db.Uuid
+  updater         User          @relation(fields: [updatedBy], references: [id])
+  notes           String?       @db.Text
+  createdAt       DateTime      @default(now()) @map("created_at") @db.Timestamptz
+
+  @@map("inventory_transactions")
+}
+
+model Payment {
+  id            String    @id @default(uuid()) @db.Uuid
+  studentId     String    @map("student_id") @db.Uuid
+  student       User      @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  amount        Decimal   @db.Decimal(10, 2)
+  type          String    @db.VarChar(30)
+  status        String    @default("due") @db.VarChar(20)
+  dueDate       DateTime  @map("due_date") @db.Date
+  transactionId String?   @unique @map("transaction_id") @db.VarChar(100)
+  paymentDate   DateTime? @map("payment_date") @db.Timestamptz
+  createdAt     DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt     DateTime  @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
+
+  @@map("payments")
+}
+
+model Notification {
+  id             String   @id @default(uuid()) @db.Uuid
+  authorId       String   @map("author_id") @db.Uuid
+  author         User     @relation("AuthorNotifications", fields: [authorId], references: [id], onDelete: Cascade)
+  title          String   @db.VarChar(150)
+  content        String   @db.Text
+  genderTarget   String?  @map("gender_target") @db.VarChar(10)
+  targetHostelId String?  @map("target_hostel_id") @db.Uuid
+  targetHostel   Hostel?  @relation(fields: [targetHostelId], references: [id], onDelete: SetNull)
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  @@map("notifications")
+}
+
+model PrivateMessage {
+  id          String   @id @default(uuid()) @db.Uuid
+  senderId    String   @map("sender_id") @db.Uuid
+  sender      User     @relation("SenderMessages", fields: [senderId], references: [id], onDelete: Cascade)
+  recipientId String   @map("recipient_id") @db.Uuid
+  recipient   User     @relation("RecipientMessages", fields: [recipientId], references: [id], onDelete: Cascade)
+  subject     String   @default("General Notice") @db.VarChar(150)
+  body        String   @db.Text
+  status      String   @default("sent") @db.VarChar(20)
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  @@map("private_messages")
+}
